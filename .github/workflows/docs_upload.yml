@@ -23,9 +23,11 @@ jobs:
       - name: Install terraform-docs
         run: |
           LATEST_VERSION=$(curl -s https://api.github.com/repos/terraform-docs/terraform-docs/releases/latest | jq -r '.tag_name')
-          wget https://github.com/terraform-docs/terraform-docs/releases/download/${LATEST_VERSION}/terraform-docs-${LATEST_VERSION}-linux-amd64 -O terraform-docs
+          wget https://github.com/terraform-docs/terraform-docs/releases/download/${LATEST_VERSION}/terraform-docs-${LATEST_VERSION}-linux-amd64.tar.gz -O terraform-docs.tar.gz
+          tar -xzf terraform-docs.tar.gz
           chmod +x terraform-docs
           sudo mv terraform-docs /usr/local/bin/
+
 
 
       - name: Run terraform-docs
