@@ -1,0 +1,72 @@
+name: Update Terraform Docs in Docs Repo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  update-docs:
+    name: Generate Terraform Docs and Push to Docs Repo
+    runs-on: ubuntu-latest
+
+    env:
+      REPO_NAME: ${{ github.event.repository.name }}
+
+    steps:
+      - name: Checkout ${{ env.REPO_NAME }} Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install terraform-docs
+        run: |
+          wget https://github.com/terraform-docs/terraform-docs/releases/latest/download/terraform-docs-linux-amd64 -O terraform-docs
+          chmod +x terraform-docs
+          sudo mv terraform-docs /usr/local/bin/
+
+      - name: Run terraform-docs
+        run: terraform-docs -c .terraform-docs.yml .
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git add README.md
+          if git diff --cached --exit-code; then
+            echo "No changes detected"
+            echo "changed=false" >> $GITHUB_ENV
+          else
+            echo "Changes detected"
+            echo "changed=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and Push Changes to ${{ env.REPO_NAME }}
+        if: env.changed == 'true'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git commit -m "pdating README in ${{ env.REPO_NAME }}" README.md
+          git push origin main
+
+      - name: Clone Docs Repository
+        if: env.changed == 'true'
+        run: |
+          git clone https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/Alto-Cloud-Technology/alto-docs.git
+          cd docs
+
+      - name: Copy Updated README to Docs Repo
+        if: env.changed == 'true'
+        run: |
+          cp README.md docs/${{ env.REPO_NAME }}.md
+          cd docs
+          git add ${{ env.REPO_NAME }}.md
+
+      - name: Commit and Push to Docs Repo
+        if: env.changed == 'true'
+        run: |
+          cd docs
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git commit -m "docs: update ${{ env.REPO_NAME }} documentation"
+          git push https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/docs.git main
