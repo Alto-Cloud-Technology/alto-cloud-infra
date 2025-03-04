@@ -50,8 +50,9 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git commit -m "pdating README in ${{ env.REPO_NAME }}" README.md
-          git push origin main
+          git commit -m "docs: update Terraform README in ${{ env.REPO_NAME }}" README.md
+          git push https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/Oscroh-Technology/oscroh-aurora.git main
+
 
       - name: Clone Docs Repository
         if: env.changed == 'true'
