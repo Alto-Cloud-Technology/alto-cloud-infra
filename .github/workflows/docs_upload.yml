@@ -1,78 +1,71 @@
-name: Update Terraform Docs in Docs Repo
+name: Terraform Docs
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: 
 
 jobs:
-  update-docs:
-    name: Generate Terraform Docs and Push to Docs Repo
+  terraform-docs:
     runs-on: ubuntu-latest
 
-    env:
-      REPO_NAME: ${{ github.event.repository.name }}
-
     steps:
-      - name: Checkout ${{ env.REPO_NAME }} Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Install terraform-docs
         run: |
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/terraform-docs/terraform-docs/releases/latest | jq -r '.tag_name')
-          wget https://github.com/terraform-docs/terraform-docs/releases/download/${LATEST_VERSION}/terraform-docs-${LATEST_VERSION}-linux-amd64.tar.gz -O terraform-docs.tar.gz
-          tar -xzf terraform-docs.tar.gz
-          chmod +x terraform-docs
-          sudo mv terraform-docs /usr/local/bin/
+          curl -Lo /tmp/terraform-docs.tar.gz https://github.com/terraform-docs/terraform-docs/releases/download/v0.19.0/terraform-docs-v0.19.0-linux-amd64.tar.gz
+          tar -xzf /tmp/terraform-docs.tar.gz -C /tmp
+          sudo mv /tmp/terraform-docs /usr/local/bin/terraform-docs
 
+      - name: Generate Terraform docs
+        run: terraform-docs .
 
-
-      - name: Run terraform-docs
-        run: terraform-docs -c .terraform-docs.yml .
-
-      - name: Check for changes
-        id: git-check
+      - name: Check for changes in README.md
+        id: check-readme
         run: |
-          git add README.md
-          if git diff --cached --exit-code; then
-            echo "No changes detected"
-            echo "changed=false" >> $GITHUB_ENV
+          if git diff --exit-code README.md; then
+            echo "readme_updated=false" >> $GITHUB_OUTPUT
+            echo "No changes to README.md file"
           else
-            echo "Changes detected"
-            echo "changed=true" >> $GITHUB_ENV
+            echo "readme_updated=true" >> $GITHUB_OUTPUT
+            echo "Documentation has been updated in the README.md file"
           fi
 
-      - name: Commit and Push Changes to ${{ env.REPO_NAME }}
-        if: env.changed == 'true'
+      - name: Skip message (no changes to README.md)
+        if: steps.check-readme.outputs.readme_updated == 'false'
+        run: echo "Skipping rest of the steps because there are no changes to README.md."
+        
+      - name: Commit and push changes
+        if: steps.check-readme.outputs.readme_updated == 'true'
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git commit -m "docs: update Terraform README in ${{ env.REPO_NAME }}" README.md
-          git push https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/${{ github.repository }}.git main
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: Auto-update Terraform documentation" || echo "No changes to commit"
+          git push
 
+      - name: Checkout alto-docs repository
+        if: steps.check-readme.outputs.readme_updated == 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: Alto-Cloud-Technology/alto-docs # Replace with the actual org and repo name
+          path: alto-docs
+          token: ${{ secrets.PAT_TOKEN }}
 
-
-      - name: Clone Docs Repository
-        if: env.changed == 'true'
+      - name: Copy updated README.md to alto-docs
+        if: steps.check-readme.outputs.readme_updated == 'true'
         run: |
-          git clone https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/Alto-Cloud-Technology/alto-docs.git
-          cd docs
+          cp README.md alto-docs/infrastructure/terraform/$(basename "$GITHUB_REPOSITORY").md
 
-      - name: Copy Updated README to Docs Repo
-        if: env.changed == 'true'
+      - name: Commit and push changes to alto-docs
+        if: steps.check-readme.outputs.readme_updated == 'true'
         run: |
-          cp README.md docs/${{ env.REPO_NAME }}.md
-          cd docs
-          git add ${{ env.REPO_NAME }}.md
-
-      - name: Commit and Push to Docs Repo
-        if: env.changed == 'true'
-        run: |
-          cd docs
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git commit -m "docs: update ${{ env.REPO_NAME }} documentation"
-          git push https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/YOUR_GITHUB_USERNAME/docs.git main
+          cd alto-docs
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add infrastructure/terraform/$(basename "$GITHUB_REPOSITORY").md
+          git commit -m "docs: Update Terraform documentation for $GITHUB_REPOSITORY" || echo "No changes to commit"
+          git push
